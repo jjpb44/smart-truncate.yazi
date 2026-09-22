@@ -590,6 +590,21 @@ function M:init_default_callbacks(always_show_patterns)
 
 		local highlights = entity_self._file:highlights()
 		if not highlights or #highlights == 0 then
+			-- smarter truncation: instead of an ellipsis, show the FIRST DROPPED
+			-- letter in a subdued style (italic + tx-3) — zero extra width
+			local se = shortened_name:find("\u{2026}")
+			if se and max_length > 1 then
+				local head = shortened_name:sub(1, se - 1)
+				local ext = shortened_name:sub(se + 3) -- skip the 3-byte …
+				local hint = utf8_sub(name, ui.width(head) + 1, ui.width(head) + 1)
+				if hint ~= "" then
+					return ui.Line {
+						ui.Span(p and p(head) or head),
+						ui.Span(hint):italic():fg("#575653"),
+						ui.Span(ext),
+					}
+				end
+			end
 			return p and p(shortened_name) or shortened_name
 		end
 
