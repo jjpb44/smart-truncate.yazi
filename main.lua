@@ -598,7 +598,7 @@ function M:init_default_callbacks(always_show_patterns)
 				local ext = shortened_name:sub(se + 3) -- skip the 3-byte …
 				local hint = utf8_sub(name, ui.width(head) + 1, ui.width(head) + 1)
 				if hint ~= "" then
-					return ui.Line {
+					return {
 						ui.Span(p and p(head) or head),
 						ui.Span(hint):italic():fg("#575653"),
 						ui.Span(ext),
