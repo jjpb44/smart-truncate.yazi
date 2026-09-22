@@ -476,24 +476,27 @@ function M:render_current_entities()
 		local current_tab_window_w = self._area.w
 
 		local entities, linemodes = {}, {}
-		for _, f in ipairs(files) do
-			local entity = Entity:new(f)
-			local linemode_rendered = Linemode:new(f):redraw()
-			local linemode_char_length = ui.width(linemode_rendered:align(ui.Align.RIGHT))
-			-- smart truncate (guarded: one throw kills the WHOLE render pass)
-			pcall(function()
-				thisPlugin:smart_truncate_entity(entity, current_tab_window_w - linemode_char_length)
-			end)
-			local ok_r, row = pcall(function()
-				return ui.Line({ entity:redraw() }):style(entity:style())
-			end)
-			if ok_r then
-				entities[#entities + 1] = row
-			else
-				entities[#entities + 1] = ui.Line({ ui.Span(tostring(f.name)) })
+		-- WHOLE-LOOP guard: any throw in here (Entity:new, Linemode, smart
+		-- truncate, entity redraw) used to kill the entire Lua render pass
+		pcall(function()
+			for _, f in ipairs(files) do
+				local entity = Entity:new(f)
+				local linemode_rendered = Linemode:new(f):redraw()
+				local linemode_char_length = ui.width(linemode_rendered:align(ui.Align.RIGHT))
+				pcall(function()
+					thisPlugin:smart_truncate_entity(entity, current_tab_window_w - linemode_char_length)
+				end)
+				local ok_r, row = pcall(function()
+					return ui.Line({ entity:redraw() }):style(entity:style())
+				end)
+				if ok_r then
+					entities[#entities + 1] = row
+				else
+					entities[#entities + 1] = ui.Line({ ui.Span(tostring(f.name)) })
+				end
+				linemodes[#linemodes + 1] = linemode_rendered
 			end
-			linemodes[#linemodes + 1] = linemode_rendered
-		end
+		end)
 
 		return {
 			ui.List(entities):area(self._area),
