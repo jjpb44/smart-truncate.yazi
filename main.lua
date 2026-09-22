@@ -597,14 +597,14 @@ function M:init_default_callbacks(always_show_patterns)
 				local head = shortened_name:sub(1, se - 1)
 				local ext = shortened_name:sub(se + 3) -- skip the 3-byte …
 				local hint = utf8_sub(name, ui.width(head) + 1, ui.width(head) + 1)
-				-- b59 rule: ui.Line dies on empty elements ("" ext/head happen when
-				-- the cut lands at the very start/end) — fall back to plain text
-				if hint ~= "" and head ~= "" and ext ~= "" then
-					return {
-						ui.Span(p and p(head) or head),
-						ui.Span(hint):italic():fg("#575653"),
-						ui.Span(ext),
-					}
+				-- b59 rule: ui.Line dies on empty elements — build the span list
+				-- conditionally so extension-less names get the hint letter too
+				if hint ~= "" and head ~= "" then
+					local out = { ui.Span(p and p(head) or head), ui.Span(hint):italic():fg("#575653") }
+					if ext ~= "" then
+						out[#out + 1] = ui.Span(ext)
+					end
+					return out
 				end
 			end
 			return p and p(shortened_name) or shortened_name
