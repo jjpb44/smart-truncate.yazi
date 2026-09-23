@@ -612,11 +612,13 @@ function M:init_default_callbacks(always_show_patterns)
 				-- b59 rule: ui.Line dies on empty elements — build the span list
 				-- conditionally so extension-less names get the hint letter too
 				if hint ~= "" and head ~= "" then
+					-- must be a ui.Line element: a bare table of Spans as a child
+					-- makes ui.Line die -> row degrades to plain name (no index)
 					local out = { ui.Span(p and p(head) or head), ui.Span(hint):italic():fg("#575653") }
 					if ext ~= "" then
 						out[#out + 1] = ui.Span(ext)
 					end
-					return out
+					return ui.Line(out)
 				end
 			end
 			return p and p(shortened_name) or shortened_name
