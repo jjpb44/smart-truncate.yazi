@@ -588,6 +588,14 @@ function M:init_default_callbacks(always_show_patterns)
 		local p = ui.printable
 		local name = p and entity_self._file.name or entity_self._file.name:gsub("\r", "?", 1)
 
+		-- t e: hide extensions (sentinel written by ext-toggle plugin)
+		if io.open("/tmp/yazi-ext-hidden", "r") then
+			local dot = name:find("%.([^.]+)$")
+			if dot and dot > 1 then
+				name = name:sub(1, dot - 1)
+			end
+		end
+
 		---------------------------
 		-- get max_length if highlight is resizable
 		local max_length = entity_self:get_component_max_length("highlights") or 0
