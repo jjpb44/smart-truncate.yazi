@@ -25,7 +25,7 @@ local _EXT_DIR = (os.getenv("XDG_CACHE_HOME") or ((os.getenv("HOME") .. "/.cache
 local _ext_stamp, _ext_on = 0, false
 local function ext_hidden()
 	local now = ya.time()
-	if now - _ext_stamp < 1 then
+	if now - _ext_stamp < 0.25 then
 		return _ext_on
 	end
 	_ext_stamp = now
