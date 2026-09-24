@@ -587,6 +587,13 @@ function M:init_default_callbacks(always_show_patterns)
 		local shortened_name
 		local p = ui.printable
 		local name = p and entity_self._file.name or entity_self._file.name:gsub("\r", "?", 1)
+		-- extension toggle (t e / .): strip ".ext" when hidden
+		if _G.__ext_state and _G.__ext_state.hidden() then
+			local dot = name:find("%.([^.]+)$")
+			if dot and dot > 1 then
+				name = name:sub(1, dot - 1)
+			end
+		end
 
 		---------------------------
 		-- get max_length if highlight is resizable
