@@ -589,7 +589,12 @@ function M:init_default_callbacks(always_show_patterns)
 		local name = p and entity_self._file.name or entity_self._file.name:gsub("\r", "?", 1)
 
 		-- t e: hide extensions (sentinel written by ext-toggle plugin)
-		if io.open("/tmp/yazi-ext-hidden", "r") then
+		local hf = io.open("/tmp/yazi-ext-hidden", "r")
+		local hide_ext = hf ~= nil
+		if hf then
+			hf:close()
+		end
+		if hide_ext then
 			local dot = name:find("%.([^.]+)$")
 			if dot and dot > 1 then
 				name = name:sub(1, dot - 1)
@@ -602,7 +607,9 @@ function M:init_default_callbacks(always_show_patterns)
 		if entity_self._file.cha.is_dir then
 			shortened_name = M:shorten(max_length, name, "", always_show_patterns)
 		else
-			local ext = entity_self._file.url.ext
+			-- t e: suppress the suffix too, else shorten re-appends url.ext
+			-- and only the dot ends up removed
+			local ext = hide_ext and "" or entity_self._file.url.ext
 
 			suffix = ext or ""
 			shortened_name = M:shorten(max_length, name, suffix, always_show_patterns)
