@@ -3,6 +3,26 @@
 
 local M = {}
 
+-- t e: extensions hidden per current directory (JSON map, written by the
+-- ext-toggle plugin). 1s cache so per-row reads are cheap.
+local _EXTDB = (os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. "/yazi/hide-ext.json"
+local _ext_stamp, _ext_on = 0, false
+local function ext_hidden()
+	local now = ya.time()
+	if now - _ext_stamp < 1 then
+		return _ext_on
+	end
+	_ext_stamp = now
+	_ext_on = false
+	local ok, j = pcall(dofile, (os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. "/yazi/lib/jsonio.lua")
+	if ok and j and cx and cx.active and cx.active.current then
+		local db = j.load(_EXTDB)
+		_ext_on = (db and db[tostring(cx.active.current.cwd)]) and true or false
+	end
+	return _ext_on
+end
+
+
 local function to_unique_set(t)
 	local result = {}
 	for _, v in ipairs(t) do
@@ -589,11 +609,7 @@ function M:init_default_callbacks(always_show_patterns)
 		local name = p and entity_self._file.name or entity_self._file.name:gsub("\r", "?", 1)
 
 		-- t e: hide extensions (sentinel written by ext-toggle plugin)
-		local hf = io.open("/tmp/yazi-ext-hidden", "r")
-		local hide_ext = hf ~= nil
-		if hf then
-			hf:close()
-		end
+		local hide_ext = ext_hidden()
 		-- files only: directories keep their full name (they often contain dots)
 		if hide_ext and not entity_self._file.cha.is_dir then
 			local dot = name:find("%.([^.]+)$")
