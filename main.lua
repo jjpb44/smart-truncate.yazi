@@ -465,24 +465,6 @@ function M:render_parent_entities()
 	end
 end
 
--- extension toggle state (sentinel file, 1s cache to avoid per-row stat spam)
-local EXT_SENTINEL = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/yazi-ext-hidden"
-local _ext_cache, _ext_at = nil, -99
-
-local function ext_toggle_on()
-	local now = os.time()
-	if _ext_cache ~= nil and (now - _ext_at) < 1 then
-		return _ext_cache
-	end
-	local f = io.open(EXT_SENTINEL, "r")
-	_ext_cache = f ~= nil
-	if f then
-		f:close()
-	end
-	_ext_at = now
-	return _ext_cache
-end
-
 function M:render_current_entities()
 	local thisPlugin = self
 	function Current:redraw()
@@ -605,15 +587,6 @@ function M:init_default_callbacks(always_show_patterns)
 		local shortened_name
 		local p = ui.printable
 		local name = p and entity_self._file.name or entity_self._file.name:gsub("\r", "?", 1)
-		-- extension toggle (t e / .): strip ".ext" when hidden.
-		-- Cross-runtime bridge: the toggle plugin is keymap-dispatched, so its
-		-- state lives in a sentinel file (globals do NOT cross runtimes).
-		if ext_toggle_on() then
-			local dot = name:find("%.([^.]+)$")
-			if dot and dot > 1 then
-				name = name:sub(1, dot - 1)
-			end
-		end
 
 		---------------------------
 		-- get max_length if highlight is resizable
