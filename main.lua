@@ -632,7 +632,10 @@ function M:init_default_callbacks(always_show_patterns)
 		local name = p and entity_self._file.name or entity_self._file.name:gsub("\r", "?", 1)
 
 		-- t e: hide extensions (sentinel written by ext-toggle plugin)
-		local hide_ext = ext_hidden()
+		local ok_h, hide_ext = pcall(ext_hidden)
+		if not ok_h then
+			hide_ext = false
+		end
 		-- files only: directories keep their full name (they often contain dots)
 		if hide_ext and not entity_self._file.cha.is_dir then
 			local dot = name:find("%.([^.]+)$")
