@@ -3,9 +3,25 @@
 
 local M = {}
 
--- t e: extensions hidden per current directory (JSON map, written by the
--- ext-toggle plugin). 1s cache so per-row reads are cheap.
-local _EXTDB = (os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. "/yazi/hide-ext.json"
+local function _ext_cwd()
+	local ok, v = pcall(function()
+		return cx.active.current.cwd
+	end)
+	if ok and type(v) == "string" then
+		return v
+	end
+	ok, v = pcall(function()
+		return cx.active.current:cwd()
+	end)
+	if ok and v ~= nil then
+		return tostring(v)
+	end
+	return tostring(cx.active.current.name)
+end
+
+-- t e: extensions hidden per current directory (one empty marker file per
+-- directory, written by the ext-toggle plugin). 1s cache so per-row reads are cheap.
+local _EXT_DIR = (os.getenv("XDG_CACHE_HOME") or ((os.getenv("HOME") .. "/.cache") .. "/yazi-ext"))
 local _ext_stamp, _ext_on = 0, false
 local function ext_hidden()
 	local now = ya.time()
@@ -14,10 +30,17 @@ local function ext_hidden()
 	end
 	_ext_stamp = now
 	_ext_on = false
-	local ok, j = pcall(dofile, (os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. "/yazi/lib/jsonio.lua")
-	if ok and j and cx and cx.active and cx.active.current then
-		local db = j.load(_EXTDB)
-		_ext_on = (db and db[tostring(cx.active.current.cwd)]) and true or false
+	if cx and cx.active and cx.active.current then
+		local cwd = _ext_cwd()
+		local h = 5381
+		for i = 1, #cwd do
+			h = (h * 33 + cwd:byte(i)) % 4294967296
+		end
+		local fh = io.open(_EXT_DIR .. "/" .. string.format("%08x", h), "r")
+		if fh then
+			fh:close()
+			_ext_on = true
+		end
 	end
 	return _ext_on
 end
