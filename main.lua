@@ -31,7 +31,8 @@ local function ext_hidden()
 	_ext_stamp = now
 	_ext_on = false
 	if cx and cx.active and cx.active.current then
-		local cwd = _ext_cwd()
+		-- same accessor the tab titles use (proven in this runtime)
+		local cwd = tostring(cx.active.current.cwd)
 		local h = 5381
 		for i = 1, #cwd do
 			h = (h * 33 + cwd:byte(i)) % 4294967296
