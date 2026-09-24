@@ -594,7 +594,8 @@ function M:init_default_callbacks(always_show_patterns)
 		if hf then
 			hf:close()
 		end
-		if hide_ext then
+		-- files only: directories keep their full name (they often contain dots)
+		if hide_ext and not entity_self._file.cha.is_dir then
 			local dot = name:find("%.([^.]+)$")
 			if dot and dot > 1 then
 				name = name:sub(1, dot - 1)
