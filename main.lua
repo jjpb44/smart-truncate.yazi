@@ -3,50 +3,6 @@
 
 local M = {}
 
-local function _ext_cwd()
-	local ok, v = pcall(function()
-		return cx.active.current.cwd
-	end)
-	if ok and type(v) == "string" then
-		return v
-	end
-	ok, v = pcall(function()
-		return cx.active.current:cwd()
-	end)
-	if ok and v ~= nil then
-		return tostring(v)
-	end
-	return tostring(cx.active.current.name)
-end
-
--- t e: extensions hidden per current directory (one empty marker file per
--- directory, written by the ext-toggle plugin). 1s cache so per-row reads are cheap.
-local _EXT_DIR = (os.getenv("XDG_CACHE_HOME") or ((os.getenv("HOME") .. "/.cache") .. "/yazi-ext"))
-local _ext_stamp, _ext_on = 0, false
-local function ext_hidden()
-	local now = ya.time()
-	if now - _ext_stamp < 0.05 then
-		return _ext_on
-	end
-	_ext_stamp = now
-	_ext_on = false
-	if cx and cx.active and cx.active.current then
-		-- same accessor the tab titles use (proven in this runtime)
-		local cwd = tostring(cx.active.current.cwd)
-		local h = 5381
-		for i = 1, #cwd do
-			h = (h * 33 + cwd:byte(i)) % 4294967296
-		end
-		local fh = io.open(_EXT_DIR .. "/" .. string.format("%08x", h), "r")
-		if fh then
-			fh:close()
-			_ext_on = true
-		end
-	end
-	return _ext_on
-end
-
-
 local function to_unique_set(t)
 	local result = {}
 	for _, v in ipairs(t) do
@@ -520,27 +476,15 @@ function M:render_current_entities()
 		local current_tab_window_w = self._area.w
 
 		local entities, linemodes = {}, {}
-		-- WHOLE-LOOP guard: any throw in here (Entity:new, Linemode, smart
-		-- truncate, entity redraw) used to kill the entire Lua render pass
-		pcall(function()
-			for _, f in ipairs(files) do
-				local entity = Entity:new(f)
-				local linemode_rendered = Linemode:new(f):redraw()
-				local linemode_char_length = ui.width(linemode_rendered:align(ui.Align.RIGHT))
-				pcall(function()
-					thisPlugin:smart_truncate_entity(entity, current_tab_window_w - linemode_char_length)
-				end)
-				local ok_r, row = pcall(function()
-					return ui.Line({ entity:redraw() }):style(entity:style())
-				end)
-				if ok_r then
-					entities[#entities + 1] = row
-				else
-					entities[#entities + 1] = ui.Line({ ui.Span(tostring(f.name)) })
-				end
-				linemodes[#linemodes + 1] = linemode_rendered
-			end
-		end)
+		for _, f in ipairs(files) do
+			local entity = Entity:new(f)
+			local linemode_rendered = Linemode:new(f):redraw()
+			local linemode_char_length = ui.width(linemode_rendered:align(ui.Align.RIGHT))
+			-- smart truncate
+			thisPlugin:smart_truncate_entity(entity, current_tab_window_w - linemode_char_length)
+			entities[#entities + 1] = ui.Line({ entity:redraw() }):style(entity:style())
+			linemodes[#linemodes + 1] = linemode_rendered
+		end
 
 		return {
 			ui.List(entities):area(self._area),
@@ -625,25 +569,83 @@ end
 
 function M:init_default_callbacks(always_show_patterns)
 	local thisPlugin = self
+local _st_ext_dir = (os.getenv("XDG_CACHE_HOME") or (os.getenv("HOME") .. "/.cache")) .. "/yazi-ext"
+local _st_ext_stamp, _st_ext_on = 0, false
+local function _st_ext_cwd()
+  local ok, v = pcall(function() return cx.active.current.cwd end)
+  if ok and v ~= nil and type(v) ~= "function" then return tostring(v) end
+  ok, v = pcall(function() return cx.active.current:cwd() end)
+  if ok and v ~= nil then
+    local st = tostring(v)
+    if st ~= "" and not st:match("^function:") then return st end
+  end
+  return tostring(cx.active.current.name)
+end
+local _st_checked_dir = nil
+
+--- Check a single dir for its ext-hide marker file.
+local function _st_has_marker(dir)
+  if not dir or dir == "" then
+    return false
+  end
+  local dd = dir
+  if #dd > 1 then
+    dd = dd:gsub("/+$", "")
+  end
+  local h = 5381
+  for i = 1, #dd do
+    h = (h * 33 + dd:byte(i)) % 4294967296
+  end
+  local f = io.open(_st_ext_dir .. "/" .. string.format("%08x", h), "r")
+  if f then
+    f:close()
+    return true
+  end
+  return false
+end
+
+--- rowdir (parent dir of the row's own file URL) is the primary marker key;
+--- the guarded cx-chain stays as a secondary fallback. Cache is keyed by dir.
+local function _st_hide_ext(rowdir)
+  local ok, res = pcall(function()
+    local now = os.clock()
+    if now - _st_ext_stamp < 0.05 and rowdir == _st_checked_dir then
+      return _st_ext_on
+    end
+    _st_ext_stamp = now
+    _st_checked_dir = rowdir
+
+    if _st_has_marker(rowdir) then
+      _st_ext_on = true
+      return true
+    end
+
+    local cwd = _st_ext_cwd()
+    _st_ext_on = _st_has_marker(cwd)
+    return _st_ext_on
+  end)
+  if ok then return res end
+  return false
+end
 	thisPlugin:children_add("highlights", function(entity_self)
 		-- override these resizeable components/children render function then re-render the whole entity with truncated/shortened value
 		local suffix = ""
 		local shortened_name
 		local p = ui.printable
 		local name = p and entity_self._file.name or entity_self._file.name:gsub("\r", "?", 1)
-
-		-- t e: hide extensions (sentinel written by ext-toggle plugin)
-		local ok_h, hide_ext = pcall(ext_hidden)
-		if not ok_h then
-			hide_ext = false
-		end
-		-- files only: directories keep their full name (they often contain dots)
-		if hide_ext and not entity_self._file.cha.is_dir then
-			local dot = name:find("%.([^.]+)$")
-			if dot and dot > 1 then
-				name = name:sub(1, dot - 1)
-			end
-		end
+    local hide_ext = false
+    do
+      local okd, nodir = pcall(function() return entity_self._file.cha.is_dir end)
+      if not (okd and nodir) then
+        local oku, url = pcall(tostring, entity_self._file.url)
+        local rowdir = (oku and url or ""):match("^(.*)/")
+        hide_ext = _st_hide_ext(rowdir)
+      end
+    end
+    if hide_ext then
+      local dot = name:find("%.([^.]+)$")
+      if dot and dot > 1 then name = name:sub(1, dot - 1) end
+    end
 
 		---------------------------
 		-- get max_length if highlight is resizable
@@ -651,9 +653,8 @@ function M:init_default_callbacks(always_show_patterns)
 		if entity_self._file.cha.is_dir then
 			shortened_name = M:shorten(max_length, name, "", always_show_patterns)
 		else
-			-- t e: suppress the suffix too, else shorten re-appends url.ext
-			-- and only the dot ends up removed
-			local ext = hide_ext and "" or entity_self._file.url.ext
+			local ext = entity_self._file.url.ext
+			if hide_ext then ext = "" end
 
 			suffix = ext or ""
 			shortened_name = M:shorten(max_length, name, suffix, always_show_patterns)
@@ -668,16 +669,12 @@ function M:init_default_callbacks(always_show_patterns)
 				local head = shortened_name:sub(1, se - 1)
 				local ext = shortened_name:sub(se + 3) -- skip the 3-byte …
 				local hint = utf8_sub(name, ui.width(head) + 1, ui.width(head) + 1)
-				-- b59 rule: ui.Line dies on empty elements — build the span list
-				-- conditionally so extension-less names get the hint letter too
-				if hint ~= "" and head ~= "" then
-					-- must be a ui.Line element: a bare table of Spans as a child
-					-- makes ui.Line die -> row degrades to plain name (no index)
-					local out = { ui.Span(p and p(head) or head), ui.Span(hint):italic():fg("#575653") }
-					if ext ~= "" then
-						out[#out + 1] = ui.Span(ext)
-					end
-					return ui.Line(out)
+				if hint ~= "" then
+					return ui.Line {
+						ui.Span(p and p(head) or head),
+						ui.Span(hint):italic():fg("#575653"),
+						ui.Span(ext),
+					}
 				end
 			end
 			return p and p(shortened_name) or shortened_name
